@@ -1,5 +1,11 @@
-const bcrypt = require("bcrypt")
+require("dotenv").config()
+
 const express = require("express")
+
+const bcrypt = require("bcrypt")
+const jwt = require('jsonwebtoken')
+const cookieParser = require("cookie-parser")
+
 const db = require("better-sqlite3")("database.db")
 db.pragma("journal_mode = WAL")
 
@@ -21,10 +27,24 @@ const app = express()
 app.set("view engine", "ejs")
 app.use(express.urlencoded({ extended: false }))
 app.use(express.static("public"))
+app.use(cookieParser())
 
 // middleware - run this first
 app.use((req, res, next) => {
     res.locals.errors=[]
+
+    // validating incoming jwt token
+    try{
+        // token value, secret value
+        const decoded = jwt.verfity(request.cookies.userCookie, process.env.JWTSECRET)
+        req.user = decoded
+    }catch(error){
+        req.user = false
+    }
+
+    res.locals.user = req.user
+    console.log(req.user)
+
     next()
 })
 
@@ -53,7 +73,6 @@ app.post("/register", (req, res) => {
 
     if(!req.body.password) errors.push("Password is required")
     if(req.body.password && req.body.password.length < 8) errors.push("Password must be at least 8 characters")
-    if(req.body.password && req.body.username.match(/^[a-zA-Z0-9]+$/)) errors.push("Password must contain special characters")
 
     if(errors.length){
         return res.render("homepage", {errors})
@@ -64,7 +83,26 @@ app.post("/register", (req, res) => {
     req.body.password = bcrypt.hashSync(req.body.password, salt)
     
     const preparedStatement = db.prepare("INSERT INTO users (username, password) VALUES (?, ?)")
-    preparedStatement.run(req.body.username, req.body.password)
+    const result = preparedStatement.run(req.body.username, req.body.password)
+
+    const lookupStatement = db.prepare("SELECT * FROM users WHERE ROWID = ?")
+    const ourUser = lookupStatement.get(result.lastInsertRowid)
+
+    // log the user in by giving them a cookie
+    // data object, secret value only we know - private key
+    const ourTokenValue = jwt.sign({exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, userid: ourUser.id, username: ourUser.username}, process.env.JWTSECRET)
+    
+    res.cookie(
+        // name, value cookie to remember, config object
+        "userCookie",
+        ourTokenValue,
+        {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            maxAge: 1000 * 60 * 60 * 24
+        }
+    )
 
     res.send("User registered successfully")
 })
