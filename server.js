@@ -27,9 +27,9 @@ const createTables = db.transaction(() => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             createdDate TEXT,
             title STRING NOT NULL,
-            body STRING NOT NULL
-            authorId INTEGER NOT NULL,
-            FOREIGN KEY(authorID) REFERENCES users(id))
+            body STRING NOT NULL,
+            authorid INTEGER NOT NULL,
+            FOREIGN KEY(authorid) REFERENCES users(id))
     `).run()
 
 })
@@ -240,7 +240,7 @@ function sharedPostValidation(req){
     return errors
 }
 
-app.post("edit-post/:id", (req, res) => {
+app.post("/edit-post/:id", (req, res) => {
     
     // try to look up post
     const statement = db.prepare(
@@ -253,14 +253,14 @@ app.post("edit-post/:id", (req, res) => {
     }
 
     // if wrong author , redirect to homepage
-    if(post.authorid !== req.users.userid){
+    if(post.authorid !== req.user.userid){
         return res.redirect("/")
     }
 
-    const erros = sharedPostValidation(req)
+    const errors = sharedPostValidation(req)
 
     if(errors.length){
-        req.render("edit-post", {errors})
+        res.render("edit-post", {errors})
     }
 
     const updateStatement = db.prepare(
@@ -289,7 +289,7 @@ app.get("/edit-post/:id", mustBeLoggedIn, (req, res) => {
     }
 
     // if wrong author , redirect to homepage
-    if(post.authorid !== req.users.userid){
+    if(post.authorid !== req.user.userid){
         return res.redirect("/")
     }
 
@@ -299,7 +299,7 @@ app.get("/edit-post/:id", mustBeLoggedIn, (req, res) => {
 })
 
 // :id dynamic parameter 
-app.get("post/:id", (req, res) => {
+app.get("/post/:id", (req, res) => {
     const statement = db.prepare(
         "SELECT posts.*, users.username FROM posts INNER JOIN users ON posts.authorid=users.id WHERE posts.id = ?"
     )
@@ -336,7 +336,7 @@ app.post("/create-post", mustBeLoggedIn, (req, res) => {
     res.redirect(`/post/${newPost.id}`)
 })
 
-app.post("delete-post/:id", mustBeLoggedIn, (req, res) => {
+app.post("/delete-post/:id", mustBeLoggedIn, (req, res) => {
 
     const statement = db.prepare(
         "SELECT * FROM posts WHERE id = ?"
